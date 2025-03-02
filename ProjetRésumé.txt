@@ -1,0 +1,492 @@
+Résumé du projet.
+
+La structure du projet est celle ci
+
+Dossier du projet contenant:
+config.py
+Dossier agents
+Dossiers roles
+Dossiers skills
+Dossiers data
+Dossier utils
+Dossier tools
+dossier environments
+dossier teams
+dossier memory
+dossier scripts
+
+Le fichier config.py contient le code suivant :
+
+import ollama
+
+class Config:
+    DEBUG_MODE = True
+    LLM_MODEL = "llama3"
+    LLM_SETTINGS = {
+        "temperature": 0.7,
+        "max_tokens": 512,
+        "top_p": 0.9,
+        "frequency_penalty": 0,
+        "presence_penalty": 0,
+        "ollama_host": "http://localhost:11434",  # URL du serveur Ollama
+    }
+
+    MEMORY = {}  # Stockage centralisé de la mémoire partagée
+
+    @staticmethod
+    def query_llm(prompt):
+        """Effectue une requête au LLM via Ollama"""
+        response = ollama.chat(model=Config.LLM_MODEL, messages=[{"role": "user", "content": prompt}])
+        return response["message"]["content"]
+
+    @staticmethod
+    def update_memory(agent_name, key, value):
+        """Met à jour la mémoire partagée pour un agent spécifique"""
+        if agent_name not in Config.MEMORY:
+            Config.MEMORY[agent_name] = {}
+        Config.MEMORY[agent_name][key] = value
+
+    @staticmethod
+    def retrieve_memory(agent_name, key):
+        """Récupère un élément de la mémoire partagée"""
+        return Config.MEMORY.get(agent_name, {}).get(key, None)
+    DEBUG_MODE = True  # Passe à False en production
+
+    @staticmethod
+    def debug_log(message: str):
+        """Affiche les logs uniquement si DEBUG_MODE est activé."""
+        if Config.DEBUG_MODE:
+            print(message)
+            
+            
+            
+Le dossier agents contient les fichiers et leur code suivant :
+
+Fichier base_agent.py
+
+from skills.communication import CommunicationSkill
+from skills.memory_access import MemorySkill
+from skills.llm_skill import LLMSkill  # 🔥 Nouveau skill !
+from config import Config
+class BaseAgent:
+    def __init__(self, name, role=None, skills=None):
+        self.name = name
+        self.role = role
+        self.skills = {}
+        
+
+        # Ajout des skills fournis (optionnels)
+        if skills:
+            for skill_class in skills:
+                self.add_skill(skill_class)
+        def add_skill(self, skill_class):
+              """Ajoute une nouvelle compétence à l’agent."""
+              skill = skill_class(self)
+              self.skills[skill.__class__.__name__] = skill  # Stockage standardisé
+              Config.debug_log(f"✅ {self.name} a reçu la compétence {skill.__class__.__name__}")
+
+    def __str__(self):
+        return f"Agent: {self.name}"
+
+    def __repr__(self):
+        return f"BaseAgent(name={self.name})"
+
+    def add_skill(self, skill_class):
+         """Ajoute une nouvelle compétence à l’agent."""
+         skill = skill_class(self)
+         self.skills[skill.name] = skill  # 🔥 Correction ici : on utilise skill.name !
+         Config.debug_log(f"🛠️ {self.name} apprend le skill: {skill.name}")
+
+    def execute_skill(self, skill_name, *args, **kwargs):
+          """Exécute une compétence de l’agent."""
+          Config.debug_log(f"🔍 {self.name} essaie d'exécuter le skill: {skill_name}")
+
+          if skill_name in self.skills:
+                 Config.debug_log(f"✅ {self.name} exécute {skill_name} avec {args}, {kwargs}")
+                 return self.skills[skill_name].perform(*args, **kwargs)
+
+          Config.debug_log(f"⚠️ {self.name} ne possède pas la compétence {skill_name}! (Compétences disponibles: {list(self.skills.keys())})")
+
+
+    def act(self, action_name, *args, **kwargs):
+        """Exécute une action définie par le rôle, sinon cherche un skill équivalent."""
+        if self.role:
+            return self.role.perform_action(action_name, *args, **kwargs)
+
+        # Si l'action correspond à un skill, on l'exécute
+        if action_name in self.skills:
+            return self.skills[action_name].perform(*args, **kwargs)  # 🔥 Correction ici aussi !
+
+        Config.debug_log(f"⚠️ {self.name} n’a pas de rôle défini et ne peut pas effectuer {action_name}!")
+
+Fichier Debator_agent.py
+
+from .base_agent import BaseAgent
+from skills.llm_skill import LLMSkill
+from skills.debate_skill import DebateSkill
+from config import Config
+class DebatorAgent(BaseAgent):
+    """Un agent spécialisé dans les débats."""
+
+    def __init__(self, name, role):
+        super().__init__(name, role)
+        self.add_skill(LLMSkill)  # ✅ Passer la classe et non l'instance
+        self.add_skill(DebateSkill)
+        Config.debug_log(f"📜 Compétences de {self.name}: {list(self.skills.keys())}")
+
+    def debate(self, topic, opponent):
+        """Engage un échange avec un adversaire sur un sujet donné."""
+        response = self.execute_skill("debate", topic=topic, opponent_name=opponent.name)
+        return response
+
+
+Le dossiers rôles contient les fichiers et leur code suivants :
+
+Fichier base_role.py
+
+from config import Config  # Pour les logs
+
+class BaseTool:
+    def __init__(self, name):
+        self.name = name
+
+    def run(self, *args, **kwargs):
+        """Méthode à implémenter dans les outils spécifiques"""
+        Config.debug_log(f"🛠️ [BaseTool] L'outil {self.name} a été utilisé avec {args}, {kwargs}")
+        raise NotImplementedError("La méthode 'run' doit être implémentée dans les sous-classes.")
+
+
+Fichier scientifique.py
+
+class Scientifique:
+    name = "Scientifique"
+    description = "Un expert qui défend les faits scientifiques établis."
+    cognitive_biases = [
+        "Dépendance aux publications scientifiques",
+        "Rejet des sources non vérifiées",
+        "Prudence dans l'affirmation des résultats"
+    ]
+
+
+Fichier conspirationniste.py
+
+class Conspirationniste:
+    name = "Conspirationniste"
+    description = "Un sceptique qui rejette les arguments officiels et préfère les théories alternatives."
+    cognitive_biases = [
+        "Confirmation bias (ne croire que ce qui va dans son sens)",
+        "Cherry-picking (sélectionner uniquement certaines preuves)",
+        "Appeal to ignorance (dire qu'une absence de preuve prouve un complot)"
+    ]
+
+
+Le dossier skills contient les fichiers et leur code suivants :
+
+Fichier base_skill.py
+
+from abc import ABC, abstractmethod
+
+class BaseSkill(ABC):
+    """Classe de base pour tous les skills."""
+    
+    def __init__(self, agent):
+        self.agent = agent  # L’agent qui possède ce skill
+    
+    @abstractmethod
+    def perform(self, *args, **kwargs):
+        """Méthode principale à implémenter par chaque skill."""
+        pass
+
+Fichier debate_skill.py
+
+from .base_skill import BaseSkill
+from config import Config
+
+class DebateSkill(BaseSkill):
+    """Skill permettant de générer des arguments en fonction du rôle et du contexte."""
+    name = "debate"
+
+    def __init__(self, agent):
+        super().__init__(agent)
+        
+    def perform(self, topic, opponent_name):
+        """Génère une réponse argumentée dans un débat."""
+        
+        prompt = f"""
+Tu es {self.agent.name}, un {self.agent.role.name}.
+Tu débats avec {opponent_name} sur le sujet : {topic}.
+
+Réponds directement à {opponent_name} en défendant ta position :
+{self.agent.role.description}
+
+🧠 Ton raisonnement est influencé par ces biais : {', '.join(self.agent.role.cognitive_biases)}
+"""
+        return self.agent.execute_skill("llm", prompt)
+
+
+Fichier communication.py
+
+from skills.base_skill import BaseSkill
+from config import Config
+
+class CommunicationSkill(BaseSkill):
+    """Skill permettant la communication entre agents, avec un humain ou avec le LLM."""
+
+    def send_to_agent(self, recipient, message):
+        """Envoie un message à un autre agent."""
+        if "CommunicationSkill" in recipient.skills:
+            Config.debug_log(f"📢 {self.agent.name} dit à {recipient.name} : {message}")
+            recipient.execute_skill("CommunicationSkill", "receive_message", message)
+        else:
+            Config.debug_log(f"⚠️ {recipient.name} ne peut pas recevoir de messages (pas de CommunicationSkill)")
+
+    def broadcast(self, agents, message):
+        """Envoie un message à plusieurs agents."""
+        Config.debug_log(f"📣 {self.agent.name} envoie à toute l’équipe : {message}")
+        for agent in agents:
+            self.send_to_agent(agent, message)
+
+    def talk_to_llm(self, prompt):
+        """Dialogue avec le modèle LLM."""
+        Config.debug_log(f"🗨️ {self.agent.name} parle au LLM...")
+        return Config.query_llm(prompt)
+
+    def receive_message(self, message):
+        """Réception d'un message (placeholder, peut être personnalisé par agent)."""
+        Config.debug_log(f"📨 {self.agent.name} a reçu : {message}")
+
+    def perform(self, mode, *args, **kwargs):
+        """Exécute le bon mode de communication."""
+        actions = {
+            "agent": self.send_to_agent,
+            "broadcast": self.broadcast,
+            "llm": self.talk_to_llm,
+            "receive_message": self.receive_message,
+        }
+        if mode in actions:
+            return actions[mode](*args, **kwargs)
+        else:
+            Config.debug_log(f"⚠️ Mode de communication inconnu : {mode}")
+
+Fichier llm_skill.py
+
+from .base_skill import BaseSkill
+from config import Config  # 🔥 Import direct de la config existante
+
+class LLMSkill(BaseSkill):
+    name = "llm"
+
+    def __init__(self, agent):
+        super().__init__(agent)
+
+    def perform(self, prompt, **kwargs):
+        """Envoie une requête au LLM configuré dans `Config`."""
+        Config.debug_log(f"🤖 {self.agent.name} interroge le LLM avec : {prompt}")
+
+        try:
+            response = Config.query_llm(prompt, **kwargs)
+            if not response or not isinstance(response, str):
+                raise ValueError("Réponse LLM invalide")
+            
+            Config.debug_log(f"📨 Réponse du LLM : {response}")
+            return response
+        
+        except Exception as e:
+            Config.debug_log(f"❌ Erreur lors de la requête LLM : {e}")
+            return None  # Pour éviter les crashs et permettre une gestion propre
+
+Fichier memory_access.py
+
+from config import Config
+from skills.base_skill import BaseSkill
+
+class MemorySkill(BaseSkill):
+    """Permet à l'agent d'accéder à la mémoire partagée."""
+
+    def perform(self, action: str, *args, **kwargs):
+        """Choisit l’action mémoire en fonction de la commande reçue."""
+        actions = {
+            "store": self.store_memory,
+            "retrieve": self.retrieve_memory,
+            "forget": self.forget_memory
+        }
+        if action in actions:
+            return actions[action](*args, **kwargs)
+        else:
+            Config.debug_log(f"❌ Action mémoire inconnue : {action}")
+
+    def store_memory(self, key: str, value: str):
+        """Stocke une donnée en mémoire."""
+        Config.update_memory(self.agent.name, key, value)
+        Config.debug_log(f"🧠 {self.agent.name} a mémorisé {key} : {value}")
+
+    def retrieve_memory(self, key: str):
+        """Récupère une donnée en mémoire."""
+        value = Config.retrieve_memory(self.agent.name, key)
+        if value is None:
+            Config.debug_log(f"⚠️ {self.agent.name} n'a aucune mémoire pour {key}")
+        else:
+            Config.debug_log(f"🔍 {self.agent.name} récupère {key} : {value}")
+        return value
+
+    def forget_memory(self, key: str):
+        """Efface une mémoire spécifique uniquement si elle existe."""
+        if Config.retrieve_memory(self.agent.name, key) is not None:
+            Config.update_memory(self.agent.name, key, None)
+            Config.debug_log(f"🚮 {self.agent.name} a oublié {key}")
+        else:
+            Config.debug_log(f"⚠️ {self.agent.name} ne pouvait pas oublier {key} (non existant)")
+
+
+Le dossier tools contient le fichier et son code suivant:
+
+Fichier base_tool.py
+
+from config import Config  # Pour les logs
+
+class BaseTool:
+    def __init__(self, name):
+        self.name = name
+
+    def run(self, *args, **kwargs):
+        """Méthode à implémenter dans les outils spécifiques"""
+        Config.debug_log(f"🛠️ [BaseTool] L'outil {self.name} a été utilisé avec {args}, {kwargs}")
+        raise NotImplementedError("La méthode 'run' doit être implémentée dans les sous-classes.")
+
+Le dossier environments contient les fichiers et leur code suivants :
+
+Fichier base_env.py
+
+from config import Config  # ✅ Import de la configuration
+
+class BaseEnvironment:
+    def __init__(self, name, rules=None):
+        self.name = name
+        self.rules = rules if rules else {}
+
+    def enforce_rules(self, action):
+        """Vérifie si une action respecte les règles de l’environnement"""
+        if action in self.rules:
+            result = self.rules[action]()
+            Config.debug_log(f"🌍 Règle appliquée sur {action} : {result}")
+            return result
+        
+        Config.debug_log(f"✅ Aucune règle spécifique pour {action}, action autorisée.")
+        return True  # ✅ Action autorisée par défaut
+
+Fichier debate_env.py
+
+from environments.base_env import BaseEnvironment
+from config import Config  # Pour le logging
+
+class DebateEnvironment:
+    """Gère l'échange entre les agents dans un débat."""
+
+    def __init__(self, agents, rounds=3):
+        self.agents = agents
+        self.rounds = rounds
+
+    def start(self, topic):
+        """Lance le débat sur un nombre défini de rounds."""
+        print(f"🎙️ Début du débat sur : {topic}")
+
+        for round_num in range(1, self.rounds + 1):
+            print(f"\n🔄 Round {round_num}/{self.rounds}\n")
+            for i in range(0, len(self.agents), 2):  # Paires d'agents
+                if i + 1 < len(self.agents):  # Vérifie qu'on a un adversaire
+                    agent1, agent2 = self.agents[i], self.agents[i + 1]
+                    response1 = agent1.debate(topic, agent2)
+                    response2 = agent2.debate(topic, agent1)
+
+                    print(f"🎙️ {agent1.name}: {response1}")
+                    print(f"🎙️ {agent2.name}: {response2}")
+
+
+Le dossier teams contient les fichiers et leurs codes suivant :
+
+Fichier base_team.py
+
+from config import Config  # ✅ Import de la configuration
+from agents.base_agent import BaseAgent  # ✅ Import de la classe Agent si nécessaire
+from environments.base_env import BaseEnvironment  # ✅ Import de l'environnement si nécessaire
+
+class BaseTeam:
+    def __init__(self, name, agents=None, environment=None):
+        self.name = name
+        self.agents = set(agents) if agents else set()
+        self.environment = environment
+
+    def add_agent(self, agent: BaseAgent):
+        if agent in self.agents:
+            Config.debug_log(f"⚠️ {agent.name} est déjà dans l'équipe {self.name}.")
+        else:
+            self.agents.add(agent)
+            Config.debug_log(f"✅ {agent.name} rejoint l'équipe {self.name}.")
+
+    def execute_task(self, action_name, *args, **kwargs):
+        Config.debug_log(f"\n🚀 Équipe {self.name} exécute : {action_name}")
+        
+        if self.environment and not self.environment.enforce_rules(action_name):
+            Config.debug_log(f"⚠️ Action {action_name} interdite dans l'environnement {self.environment.name}!")
+            return None
+
+        responses = {}
+        for agent in self.agents:
+            try:
+                responses[agent.name] = agent.act(action_name, *args, **kwargs)
+            except Exception as e:
+                Config.debug_log(f"❌ Erreur lors de l'exécution de {action_name} par {agent.name} : {e}")
+        
+        return responses
+
+
+Fichier debate_team.py
+
+from teams.base_team import BaseTeam
+from environments.debate_env import DebateEnvironment
+from config import Config  # Pour le logging
+
+class DebateTeam:
+    def __init__(self, agents, environment, rounds=5):
+        self.agents = agents
+        self.environment = environment
+        self.rounds = rounds  # Nombre de rounds configuré
+
+    def start_debate(self, topic):
+        """Lance un débat en plusieurs rounds."""
+        argument = None  # Premier argument non défini
+
+        for round_number in range(1, self.rounds + 1):
+            print(f"\n🎙️ **Round {round_number}/{self.rounds}**")
+
+            for i in range(len(self.agents)):
+                speaker = self.agents[i]
+                opponent = self.agents[(i + 1) % len(self.agents)]  # Tourne entre les agents
+                
+                argument = speaker.execute_skill("debate", topic, opponent.name, argument)
+                print(f"🗣️ {speaker.name} : {argument}")
+
+                if argument is None:
+                    print(f"❌ {speaker.name} n’a pas pu répondre.")
+                    return
+
+Le dossier memory contient le fichier et son code suivant:
+
+Fichier memory.py
+
+class Memory:
+    """Mémoire centrale pouvant être partagée entre plusieurs agents."""
+    
+    def __init__(self):
+        self.global_memory = []
+    
+    def store(self, info):
+        """Ajoute une information à la mémoire globale."""
+        self.global_memory.append(info)
+    
+    def retrieve(self, n=5):
+        """Récupère les dernières informations mémorisées."""
+        return self.global_memory[-n:]
+        
+Les dossiers data et utils sont vides. Le dossier scripts contient un fichier test.py qui me permet de tester le projet.
+Tous les dossiers continnent un __init__.py.
