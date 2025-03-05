@@ -78,7 +78,7 @@ class WebSearchTool(BaseTool):
         results = []
         search_results = driver.find_elements(By.CSS_SELECTOR, "div.tF2Cxc")
 
-        for result in search_results[:6]:
+        for result in search_results[:max_results]:
             try:
                 title = result.find_element(By.TAG_NAME, "h3").text
                 link = result.find_element(By.TAG_NAME, "a").get_attribute("href")

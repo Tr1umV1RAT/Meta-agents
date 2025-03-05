@@ -42,7 +42,7 @@ class TeamImmobilier(BaseTeam):
                 Config.debug_log(f"🔄 Round {round_num}/{self.n_round}")
             
             # Étape 1 : Recherche initiale
-            raw_results = self.chercheur.execute_search(self.search_criteria, self.analyseur)
+            raw_results = self.chercheur.query_ameliorator(self.search_criteria, self.analyseur)
             if self.verbose:
                 Config.debug_log(f"📄 Résultats initiaux : {len(raw_results) if raw_results else 0} annonces trouvées.")
             
@@ -53,7 +53,7 @@ class TeamImmobilier(BaseTeam):
                 if self.verbose:
                     Config.debug_log(f"✨ Nouvelle requête améliorée : {improved_query}")
             
-            refined_results = self.chercheur.execute_search(improved_query, self.analyseur)
+            refined_results = self.chercheur.query_ameliorator(improved_query, self.analyseur)
             if self.verbose:
                 Config.debug_log(f"📑 Résultats raffinés : {len(refined_results) if refined_results else 0} annonces trouvées.")
             

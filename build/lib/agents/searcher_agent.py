@@ -48,4 +48,4 @@ class RequestChercheurAgent(BaseAgent):
         cleaned_results = [self.web_cleaner_tool.run(result) for result in raw_results]
         Config.debug_log(f"🧹 [RequestChercheur] Résultats nettoyés : {cleaned_results}")
 
-        return cleaned_results, max_results, improved_query
+        return cleaned_results

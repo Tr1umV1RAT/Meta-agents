@@ -3,10 +3,10 @@ from skills.memory_access import MemorySkill
 from skills.llm_skill import LLMSkill  # 🔥 Nouveau skill !
 from config import Config
 class BaseAgent:
-    def __init__(self, name, role=None, skills=None):
+    def __init__(self, name, role, skills=None):
         self.name = name
         self.role = role
-        self.skills = {}
+        self.skills = skills if skills is not None else {} 
         
 
         # Ajout des skills fournis (optionnels)
@@ -37,7 +37,7 @@ class BaseAgent:
 
           Config.debug_log(f"⚠️ {self.name} ne possède pas la compétence {skill_name}! (Compétences disponibles: {list(self.skills.keys())})")
 
-   
+    
                      
     def act(self, action_name, *args, **kwargs):
         """Exécute une action définie par le rôle, sinon cherche un skill équivalent."""
